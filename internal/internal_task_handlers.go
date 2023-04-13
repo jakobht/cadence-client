@@ -837,7 +837,7 @@ func (w *workflowExecutionContextImpl) ProcessWorkflowTask(workflowTask *workflo
 	var respondEvents []*s.HistoryEvent
 
 	skipReplayCheck := w.skipReplayCheck()
-	isReplayTest := task.GetPreviousStartedEventId() == replayPreviousStartedEventID
+	isReplayTest := true // task.GetPreviousStartedEventId() == replayPreviousStartedEventID
 	if isReplayTest {
 		w.wth.logger.Info("Processing workflow task in replay test mode",
 			zap.String(tagWorkflowType, task.WorkflowType.GetName()),
@@ -941,7 +941,7 @@ ProcessEvents:
 	if nonDeterministicErr == nil && w.err != nil {
 		if panicErr, ok := w.err.(*workflowPanicError); ok && panicErr.value != nil {
 			if _, isStateMachinePanic := panicErr.value.(stateMachineIllegalStatePanic); isStateMachinePanic {
-				if isReplayTest {
+				if isReplayTest || true {
 					// NOTE: we should do this regardless if it's in replay test or not
 					// but since previously we checked the wrong error type, it may break existing customers workflow
 					nonDeterministicErr = panicErr

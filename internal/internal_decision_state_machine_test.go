@@ -38,7 +38,7 @@ func Test_TimerStateMachine_CancelBeforeSent(t *testing.T) {
 	h := newDecisionsHelper()
 	d := h.startTimer(attributes)
 	require.Equal(t, decisionStateCreated, d.getState())
-	h.cancelTimer(timerID)
+	h.cancelTimer(timerID, "")
 	require.Equal(t, decisionStateCompleted, d.getState())
 	decisions := h.getDecisions(true)
 	require.Equal(t, 0, len(decisions))
@@ -58,15 +58,15 @@ func Test_TimerStateMachine_CancelAfterInitiated(t *testing.T) {
 	require.Equal(t, 1, len(decisions))
 	require.Equal(t, s.DecisionTypeStartTimer, decisions[0].GetDecisionType())
 	require.Equal(t, attributes, decisions[0].StartTimerDecisionAttributes)
-	h.handleTimerStarted(timerID)
+	h.handleTimerStarted(timerID, "")
 	require.Equal(t, decisionStateInitiated, d.getState())
-	h.cancelTimer(timerID)
+	h.cancelTimer(timerID, "")
 	require.Equal(t, decisionStateCanceledAfterInitiated, d.getState())
 	decisions = h.getDecisions(true)
 	require.Equal(t, 1, len(decisions))
 	require.Equal(t, s.DecisionTypeCancelTimer, decisions[0].GetDecisionType())
 	require.Equal(t, decisionStateCancellationDecisionSent, d.getState())
-	h.handleTimerCanceled(timerID)
+	h.handleTimerCanceled(timerID, "")
 	require.Equal(t, decisionStateCompleted, d.getState())
 }
 
@@ -83,16 +83,16 @@ func Test_TimerStateMachine_CompletedAfterCancel(t *testing.T) {
 	require.Equal(t, decisionStateDecisionSent, d.getState())
 	require.Equal(t, 1, len(decisions))
 	require.Equal(t, s.DecisionTypeStartTimer, decisions[0].GetDecisionType())
-	h.cancelTimer(timerID)
+	h.cancelTimer(timerID, "")
 	require.Equal(t, decisionStateCanceledBeforeInitiated, d.getState())
 	require.Equal(t, 0, len(h.getDecisions(true)))
-	h.handleTimerStarted(timerID)
+	h.handleTimerStarted(timerID, "")
 	require.Equal(t, decisionStateCanceledAfterInitiated, d.getState())
 	decisions = h.getDecisions(true)
 	require.Equal(t, 1, len(decisions))
 	require.Equal(t, s.DecisionTypeCancelTimer, decisions[0].GetDecisionType())
 	require.Equal(t, decisionStateCancellationDecisionSent, d.getState())
-	h.handleTimerClosed(timerID)
+	h.handleTimerClosed(timerID, "")
 	require.Equal(t, decisionStateCompletedAfterCancellationDecisionSent, d.getState())
 }
 
@@ -109,10 +109,10 @@ func Test_TimerStateMachine_CompleteWithoutCancel(t *testing.T) {
 	require.Equal(t, decisionStateDecisionSent, d.getState())
 	require.Equal(t, 1, len(decisions))
 	require.Equal(t, s.DecisionTypeStartTimer, decisions[0].GetDecisionType())
-	h.handleTimerStarted(timerID)
+	h.handleTimerStarted(timerID, "")
 	require.Equal(t, decisionStateInitiated, d.getState())
 	require.Equal(t, 0, len(h.getDecisions(false)))
-	h.handleTimerClosed(timerID)
+	h.handleTimerClosed(timerID, "")
 	require.Equal(t, decisionStateCompleted, d.getState())
 }
 
@@ -125,11 +125,11 @@ func Test_TimerStateMachine_PanicInvalidStateTransition(t *testing.T) {
 	h := newDecisionsHelper()
 	h.startTimer(attributes)
 	h.getDecisions(true)
-	h.handleTimerStarted(timerID)
-	h.handleTimerClosed(timerID)
+	h.handleTimerStarted(timerID, "")
+	h.handleTimerClosed(timerID, "")
 
 	panicErr := runAndCatchPanic(func() {
-		h.handleCancelTimerFailed(timerID)
+		h.handleCancelTimerFailed(timerID, "")
 	})
 
 	require.NotNil(t, panicErr)
@@ -150,11 +150,11 @@ func Test_TimerCancelEventOrdering(t *testing.T) {
 	require.Equal(t, 1, len(decisions))
 	require.Equal(t, s.DecisionTypeStartTimer, decisions[0].GetDecisionType())
 	require.Equal(t, attributes, decisions[0].StartTimerDecisionAttributes)
-	h.handleTimerStarted(timerID)
+	h.handleTimerStarted(timerID, "")
 	require.Equal(t, decisionStateInitiated, d.getState())
 	m := h.recordLocalActivityMarker(localActivityID, []byte{})
 	require.Equal(t, decisionStateCreated, m.getState())
-	h.cancelTimer(timerID)
+	h.cancelTimer(timerID, "")
 	require.Equal(t, decisionStateCanceledAfterInitiated, d.getState())
 	decisions = h.getDecisions(true)
 	require.Equal(t, 2, len(decisions))
@@ -179,11 +179,11 @@ func Test_ActivityStateMachine_CompleteWithoutCancel(t *testing.T) {
 	require.Equal(t, s.DecisionTypeScheduleActivityTask, decisions[0].GetDecisionType())
 
 	// activity scheduled
-	h.handleActivityTaskScheduled(1, activityID)
+	h.handleActivityTaskScheduled(1, activityID, "")
 	require.Equal(t, decisionStateInitiated, d.getState())
 
 	// activity completed
-	h.handleActivityTaskClosed(activityID)
+	h.handleActivityTaskClosed(activityID, "")
 	require.Equal(t, decisionStateCompleted, d.getState())
 }
 
@@ -200,7 +200,7 @@ func Test_ActivityStateMachine_CancelBeforeSent(t *testing.T) {
 	require.Equal(t, decisionStateCreated, d.getState())
 
 	// cancel before decision sent, this will put decision state machine directly into completed state
-	h.requestCancelActivityTask(activityID)
+	h.requestCancelActivityTask(activityID, "")
 	require.Equal(t, decisionStateCompleted, d.getState())
 
 	// there should be no decisions needed to be send
@@ -224,19 +224,19 @@ func Test_ActivityStateMachine_CancelAfterSent(t *testing.T) {
 	require.Equal(t, s.DecisionTypeScheduleActivityTask, decisions[0].GetDecisionType())
 
 	// cancel activity
-	h.requestCancelActivityTask(activityID)
+	h.requestCancelActivityTask(activityID, "")
 	require.Equal(t, decisionStateCanceledBeforeInitiated, d.getState())
 	require.Equal(t, 0, len(h.getDecisions(true)))
 
 	// activity scheduled
-	h.handleActivityTaskScheduled(1, activityID)
+	h.handleActivityTaskScheduled(1, activityID, "")
 	require.Equal(t, decisionStateCanceledAfterInitiated, d.getState())
 	decisions = h.getDecisions(true)
 	require.Equal(t, 1, len(decisions))
 	require.Equal(t, s.DecisionTypeRequestCancelActivityTask, decisions[0].GetDecisionType())
 
 	// activity canceled
-	h.handleActivityTaskCanceled(activityID)
+	h.handleActivityTaskCanceled(activityID, "")
 	require.Equal(t, decisionStateCompleted, d.getState())
 	require.Equal(t, 0, len(h.getDecisions(false)))
 }
@@ -257,19 +257,19 @@ func Test_ActivityStateMachine_CompletedAfterCancel(t *testing.T) {
 	require.Equal(t, s.DecisionTypeScheduleActivityTask, decisions[0].GetDecisionType())
 
 	// cancel activity
-	h.requestCancelActivityTask(activityID)
+	h.requestCancelActivityTask(activityID, "")
 	require.Equal(t, decisionStateCanceledBeforeInitiated, d.getState())
 	require.Equal(t, 0, len(h.getDecisions(true)))
 
 	// activity scheduled
-	h.handleActivityTaskScheduled(1, activityID)
+	h.handleActivityTaskScheduled(1, activityID, "")
 	require.Equal(t, decisionStateCanceledAfterInitiated, d.getState())
 	decisions = h.getDecisions(true)
 	require.Equal(t, 1, len(decisions))
 	require.Equal(t, s.DecisionTypeRequestCancelActivityTask, decisions[0].GetDecisionType())
 
 	// activity completed after cancel
-	h.handleActivityTaskClosed(activityID)
+	h.handleActivityTaskClosed(activityID, "")
 	require.Equal(t, decisionStateCompletedAfterCancellationDecisionSent, d.getState())
 	require.Equal(t, 0, len(h.getDecisions(false)))
 }
@@ -287,18 +287,18 @@ func Test_ActivityStateMachine_PanicInvalidStateTransition(t *testing.T) {
 
 	// verify that using invalid activity id will panic
 	err := runAndCatchPanic(func() {
-		h.handleActivityTaskClosed("invalid-activity-id")
+		h.handleActivityTaskClosed("invalid-activity-id", "")
 	})
 	require.NotNil(t, err)
 
 	// send schedule decision
 	h.getDecisions(true)
 	// activity scheduled
-	h.handleActivityTaskScheduled(1, activityID)
+	h.handleActivityTaskScheduled(1, activityID, "")
 
 	// now simulate activity canceled, which is invalid transition
 	err = runAndCatchPanic(func() {
-		h.handleActivityTaskCanceled(activityID)
+		h.handleActivityTaskCanceled(activityID, "")
 	})
 	require.NotNil(t, err)
 }
@@ -322,17 +322,17 @@ func Test_ChildWorkflowStateMachine_Basic(t *testing.T) {
 	require.Equal(t, s.DecisionTypeStartChildWorkflowExecution, decisions[0].GetDecisionType())
 
 	// child workflow initiated
-	h.handleStartChildWorkflowExecutionInitiated(workflowID)
+	h.handleStartChildWorkflowExecutionInitiated(workflowID, "")
 	require.Equal(t, decisionStateInitiated, d.getState())
 	require.Equal(t, 0, len(h.getDecisions(true)))
 
 	// child workflow started
-	h.handleChildWorkflowExecutionStarted(workflowID)
+	h.handleChildWorkflowExecutionStarted(workflowID, "")
 	require.Equal(t, decisionStateStarted, d.getState())
 	require.Equal(t, 0, len(h.getDecisions(true)))
 
 	// child workflow completed
-	h.handleChildWorkflowExecutionClosed(workflowID)
+	h.handleChildWorkflowExecutionClosed(workflowID, "")
 	require.Equal(t, decisionStateCompleted, d.getState())
 	require.Equal(t, 0, len(h.getDecisions(true)))
 }
@@ -355,12 +355,12 @@ func Test_ChildWorkflowStateMachine_CancelSucceed(t *testing.T) {
 	// send decision
 	decisions := h.getDecisions(true)
 	// child workflow initiated
-	h.handleStartChildWorkflowExecutionInitiated(workflowID)
+	h.handleStartChildWorkflowExecutionInitiated(workflowID, "")
 	// child workflow started
-	h.handleChildWorkflowExecutionStarted(workflowID)
+	h.handleChildWorkflowExecutionStarted(workflowID, "")
 
 	// cancel child workflow
-	h.requestCancelExternalWorkflowExecution(domain, workflowID, runID, cancellationID, isChildWorkflowOnly)
+	h.requestCancelExternalWorkflowExecution(domain, workflowID, runID, cancellationID, isChildWorkflowOnly, "")
 	require.Equal(t, decisionStateCanceledAfterStarted, d.getState())
 
 	// send cancel request
@@ -370,15 +370,15 @@ func Test_ChildWorkflowStateMachine_CancelSucceed(t *testing.T) {
 	require.Equal(t, s.DecisionTypeRequestCancelExternalWorkflowExecution, decisions[0].GetDecisionType())
 
 	// cancel request initiated
-	h.handleRequestCancelExternalWorkflowExecutionInitiated(initiatedEventID, workflowID, cancellationID)
+	h.handleRequestCancelExternalWorkflowExecutionInitiated(initiatedEventID, workflowID, cancellationID, "")
 	require.Equal(t, decisionStateCancellationDecisionSent, d.getState())
 
 	// cancel request accepted
-	h.handleExternalWorkflowExecutionCancelRequested(initiatedEventID, workflowID)
+	h.handleExternalWorkflowExecutionCancelRequested(initiatedEventID, workflowID, "")
 	require.Equal(t, decisionStateCancellationDecisionSent, d.getState())
 
 	// child workflow canceled
-	h.handleChildWorkflowExecutionCanceled(workflowID)
+	h.handleChildWorkflowExecutionCanceled(workflowID, "")
 	require.Equal(t, decisionStateCompleted, d.getState())
 }
 
@@ -401,7 +401,7 @@ func Test_ChildWorkflowStateMachine_InvalidStates(t *testing.T) {
 
 	// invalid: start child workflow failed before decision was sent
 	err := runAndCatchPanic(func() {
-		h.handleStartChildWorkflowExecutionFailed(workflowID)
+		h.handleStartChildWorkflowExecutionFailed(workflowID, "")
 	})
 	require.NotNil(t, err)
 
@@ -412,24 +412,24 @@ func Test_ChildWorkflowStateMachine_InvalidStates(t *testing.T) {
 
 	// invalid: child workflow completed before it was initiated
 	err = runAndCatchPanic(func() {
-		h.handleChildWorkflowExecutionClosed(workflowID)
+		h.handleChildWorkflowExecutionClosed(workflowID, "")
 	})
 	require.NotNil(t, err)
 
 	// child workflow initiated
-	h.handleStartChildWorkflowExecutionInitiated(workflowID)
+	h.handleStartChildWorkflowExecutionInitiated(workflowID, "")
 	require.Equal(t, decisionStateInitiated, d.getState())
 
-	h.handleChildWorkflowExecutionStarted(workflowID)
+	h.handleChildWorkflowExecutionStarted(workflowID, "")
 	require.Equal(t, decisionStateStarted, d.getState())
 	// invalid: cancel child workflow failed before cancel request
 	err = runAndCatchPanic(func() {
-		h.handleRequestCancelExternalWorkflowExecutionFailed(initiatedEventID, workflowID)
+		h.handleRequestCancelExternalWorkflowExecutionFailed(initiatedEventID, workflowID, "")
 	})
 	require.NotNil(t, err)
 
 	// cancel child workflow after child workflow is started
-	h.requestCancelExternalWorkflowExecution(domain, workflowID, runID, cancellationID, isChildWorkflowOnly)
+	h.requestCancelExternalWorkflowExecution(domain, workflowID, runID, cancellationID, isChildWorkflowOnly, "")
 	require.Equal(t, decisionStateCanceledAfterStarted, d.getState())
 
 	// send cancel request
@@ -440,27 +440,27 @@ func Test_ChildWorkflowStateMachine_InvalidStates(t *testing.T) {
 
 	// invalid: start child workflow failed after it was already started
 	err = runAndCatchPanic(func() {
-		h.handleStartChildWorkflowExecutionFailed(workflowID)
+		h.handleStartChildWorkflowExecutionFailed(workflowID, "")
 	})
 	require.NotNil(t, err)
 
 	// invalid: child workflow initiated again
 	err = runAndCatchPanic(func() {
-		h.handleStartChildWorkflowExecutionInitiated(workflowID)
+		h.handleStartChildWorkflowExecutionInitiated(workflowID, "")
 	})
 	require.NotNil(t, err)
 
 	// cancel request initiated
-	h.handleRequestCancelExternalWorkflowExecutionInitiated(initiatedEventID, workflowID, cancellationID)
+	h.handleRequestCancelExternalWorkflowExecutionInitiated(initiatedEventID, workflowID, cancellationID, "")
 	require.Equal(t, decisionStateCancellationDecisionSent, d.getState())
 
 	// child workflow completed
-	h.handleChildWorkflowExecutionClosed(workflowID)
+	h.handleChildWorkflowExecutionClosed(workflowID, "")
 	require.Equal(t, decisionStateCompletedAfterCancellationDecisionSent, d.getState())
 
 	// invalid: child workflow canceled after it was completed
 	err = runAndCatchPanic(func() {
-		h.handleChildWorkflowExecutionCanceled(workflowID)
+		h.handleChildWorkflowExecutionCanceled(workflowID, "")
 	})
 	require.NotNil(t, err)
 }
@@ -483,22 +483,22 @@ func Test_ChildWorkflowStateMachine_CancelFailed(t *testing.T) {
 	// send decision
 	h.getDecisions(true)
 	// child workflow initiated
-	h.handleStartChildWorkflowExecutionInitiated(workflowID)
+	h.handleStartChildWorkflowExecutionInitiated(workflowID, "")
 	// child workflow started
-	h.handleChildWorkflowExecutionStarted(workflowID)
+	h.handleChildWorkflowExecutionStarted(workflowID, "")
 	// cancel child workflow
-	h.requestCancelExternalWorkflowExecution(domain, workflowID, runID, cancellationID, isChildWorkflowOnly)
+	h.requestCancelExternalWorkflowExecution(domain, workflowID, runID, cancellationID, isChildWorkflowOnly, "")
 	// send cancel request
 	h.getDecisions(true)
 	// cancel request initiated
-	h.handleRequestCancelExternalWorkflowExecutionInitiated(initiatedEventID, workflowID, cancellationID)
+	h.handleRequestCancelExternalWorkflowExecutionInitiated(initiatedEventID, workflowID, cancellationID, "")
 
 	// cancel request failed
-	h.handleRequestCancelExternalWorkflowExecutionFailed(initiatedEventID, workflowID)
+	h.handleRequestCancelExternalWorkflowExecutionFailed(initiatedEventID, workflowID, "")
 	require.Equal(t, decisionStateStarted, d.getState())
 
 	// child workflow completed
-	h.handleChildWorkflowExecutionClosed(workflowID)
+	h.handleChildWorkflowExecutionClosed(workflowID, "")
 	require.Equal(t, decisionStateCompleted, d.getState())
 }
 
@@ -542,9 +542,9 @@ func Test_CancelExternalWorkflowStateMachine_Succeed(t *testing.T) {
 	h := newDecisionsHelper()
 
 	// request cancel external workflow
-	decision := h.requestCancelExternalWorkflowExecution(domain, workflowID, runID, cancellationID, childWorkflowOnly)
+	decision := h.requestCancelExternalWorkflowExecution(domain, workflowID, runID, cancellationID, childWorkflowOnly, "")
 	require.False(t, decision.isDone())
-	d := h.getDecision(makeDecisionID(decisionTypeCancellation, cancellationID))
+	d := h.getDecision(makeDecisionID(decisionTypeCancellation, cancellationID), "")
 	require.Equal(t, decisionStateCreated, d.getState())
 
 	// send decisions
@@ -564,16 +564,16 @@ func Test_CancelExternalWorkflowStateMachine_Succeed(t *testing.T) {
 	)
 
 	// cancel request initiated
-	h.handleRequestCancelExternalWorkflowExecutionInitiated(initiatedEventID, workflowID, cancellationID)
+	h.handleRequestCancelExternalWorkflowExecutionInitiated(initiatedEventID, workflowID, cancellationID, "")
 	require.Equal(t, decisionStateInitiated, d.getState())
 
 	// cancel requested
-	h.handleExternalWorkflowExecutionCancelRequested(initiatedEventID, workflowID)
+	h.handleExternalWorkflowExecutionCancelRequested(initiatedEventID, workflowID, "")
 	require.Equal(t, decisionStateCompleted, d.getState())
 
 	// mark the cancel request failed now will make it invalid state transition
 	err := runAndCatchPanic(func() {
-		h.handleRequestCancelExternalWorkflowExecutionFailed(initiatedEventID, workflowID)
+		h.handleRequestCancelExternalWorkflowExecutionFailed(initiatedEventID, workflowID, "")
 	})
 	require.NotNil(t, err)
 }
@@ -589,9 +589,9 @@ func Test_CancelExternalWorkflowStateMachine_Failed(t *testing.T) {
 	h := newDecisionsHelper()
 
 	// request cancel external workflow
-	decision := h.requestCancelExternalWorkflowExecution(domain, workflowID, runID, cancellationID, childWorkflowOnly)
+	decision := h.requestCancelExternalWorkflowExecution(domain, workflowID, runID, cancellationID, childWorkflowOnly, "")
 	require.False(t, decision.isDone())
-	d := h.getDecision(makeDecisionID(decisionTypeCancellation, cancellationID))
+	d := h.getDecision(makeDecisionID(decisionTypeCancellation, cancellationID), "")
 	require.Equal(t, decisionStateCreated, d.getState())
 
 	// send decisions
@@ -611,16 +611,16 @@ func Test_CancelExternalWorkflowStateMachine_Failed(t *testing.T) {
 	)
 
 	// cancel request initiated
-	h.handleRequestCancelExternalWorkflowExecutionInitiated(initiatedEventID, workflowID, cancellationID)
+	h.handleRequestCancelExternalWorkflowExecutionInitiated(initiatedEventID, workflowID, cancellationID, "")
 	require.Equal(t, decisionStateInitiated, d.getState())
 
 	// cancel request failed
-	h.handleRequestCancelExternalWorkflowExecutionFailed(initiatedEventID, workflowID)
+	h.handleRequestCancelExternalWorkflowExecutionFailed(initiatedEventID, workflowID, "")
 	require.Equal(t, decisionStateCompleted, d.getState())
 
 	// mark the cancel request succeed now will make it invalid state transition
 	err := runAndCatchPanic(func() {
-		h.handleExternalWorkflowExecutionCancelRequested(initiatedEventID, workflowID)
+		h.handleExternalWorkflowExecutionCancelRequested(initiatedEventID, workflowID, "")
 	})
 	require.NotNil(t, err)
 }

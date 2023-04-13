@@ -688,11 +688,11 @@ func newDecisionsHelper() *decisionsHelper {
 	}
 }
 
-func (h *decisionsHelper) getDecision(id decisionID) decisionStateMachine {
+func (h *decisionsHelper) getDecision(id decisionID, name string) decisionStateMachine {
 	decision, ok := h.decisions[id]
 	if !ok {
-		panicMsg := fmt.Sprintf("unknown decision %v, possible causes are nondeterministic workflow definition code"+
-			" or incompatible change in the workflow definition", id)
+		panicMsg := fmt.Sprintf("Expected decision from history %v, with name %q, possible causes are nondeterministic workflow definition code"+
+			" or incompatible change in the workflow definition", id, name)
 		panicIllegalState(panicMsg)
 	}
 	// Move the last update decision state machine to the back of the list.
@@ -716,38 +716,38 @@ func (h *decisionsHelper) scheduleActivityTask(attributes *s.ScheduleActivityTas
 	return decision
 }
 
-func (h *decisionsHelper) requestCancelActivityTask(activityID string) decisionStateMachine {
+func (h *decisionsHelper) requestCancelActivityTask(activityID string, name string) decisionStateMachine {
 	id := makeDecisionID(decisionTypeActivity, activityID)
-	decision := h.getDecision(id)
+	decision := h.getDecision(id, name)
 	decision.cancel()
 	return decision
 }
 
-func (h *decisionsHelper) handleActivityTaskClosed(activityID string) decisionStateMachine {
-	decision := h.getDecision(makeDecisionID(decisionTypeActivity, activityID))
+func (h *decisionsHelper) handleActivityTaskClosed(activityID string, name string) decisionStateMachine {
+	decision := h.getDecision(makeDecisionID(decisionTypeActivity, activityID), name)
 	decision.handleCompletionEvent()
 	return decision
 }
 
-func (h *decisionsHelper) handleActivityTaskScheduled(scheduledEventID int64, activityID string) {
+func (h *decisionsHelper) handleActivityTaskScheduled(scheduledEventID int64, activityID string, name string) {
 	h.scheduledEventIDToActivityID[scheduledEventID] = activityID
-	decision := h.getDecision(makeDecisionID(decisionTypeActivity, activityID))
+	decision := h.getDecision(makeDecisionID(decisionTypeActivity, activityID), name)
 	decision.handleInitiatedEvent()
 }
 
-func (h *decisionsHelper) handleActivityTaskCancelRequested(activityID string) {
-	decision := h.getDecision(makeDecisionID(decisionTypeActivity, activityID))
+func (h *decisionsHelper) handleActivityTaskCancelRequested(activityID string, name string) {
+	decision := h.getDecision(makeDecisionID(decisionTypeActivity, activityID), name)
 	decision.handleCancelInitiatedEvent()
 }
 
-func (h *decisionsHelper) handleActivityTaskCanceled(activityID string) decisionStateMachine {
-	decision := h.getDecision(makeDecisionID(decisionTypeActivity, activityID))
+func (h *decisionsHelper) handleActivityTaskCanceled(activityID string, name string) decisionStateMachine {
+	decision := h.getDecision(makeDecisionID(decisionTypeActivity, activityID), name)
 	decision.handleCanceledEvent()
 	return decision
 }
 
-func (h *decisionsHelper) handleRequestCancelActivityTaskFailed(activityID string) {
-	decision := h.getDecision(makeDecisionID(decisionTypeActivity, activityID))
+func (h *decisionsHelper) handleRequestCancelActivityTaskFailed(activityID string, name string) {
+	decision := h.getDecision(makeDecisionID(decisionTypeActivity, activityID), name)
 	decision.handleCancelFailedEvent()
 }
 
@@ -829,18 +829,18 @@ func (h *decisionsHelper) startChildWorkflowExecution(attributes *s.StartChildWo
 	return decision
 }
 
-func (h *decisionsHelper) handleStartChildWorkflowExecutionInitiated(workflowID string) {
-	decision := h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID))
+func (h *decisionsHelper) handleStartChildWorkflowExecutionInitiated(workflowID string, name string) {
+	decision := h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID), name)
 	decision.handleInitiatedEvent()
 }
 
-func (h *decisionsHelper) handleStartChildWorkflowExecutionFailed(workflowID string) decisionStateMachine {
-	decision := h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID))
+func (h *decisionsHelper) handleStartChildWorkflowExecutionFailed(workflowID string, name string) decisionStateMachine {
+	decision := h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID), name)
 	decision.handleInitiationFailedEvent()
 	return decision
 }
 
-func (h *decisionsHelper) requestCancelExternalWorkflowExecution(domain, workflowID, runID string, cancellationID string, childWorkflowOnly bool) decisionStateMachine {
+func (h *decisionsHelper) requestCancelExternalWorkflowExecution(domain, workflowID, runID string, cancellationID string, childWorkflowOnly bool, name string) decisionStateMachine {
 	if childWorkflowOnly {
 		// For cancellation of child workflow only, we do not use cancellation ID
 		// since the child workflow cancellation go through the existing child workflow
@@ -858,7 +858,7 @@ func (h *decisionsHelper) requestCancelExternalWorkflowExecution(domain, workflo
 			panic("cancellation on child workflow should not use run ID")
 		}
 		// targeting child workflow
-		decision := h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID))
+		decision := h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID), name)
 		decision.cancel()
 		return decision
 	}
@@ -885,43 +885,43 @@ func (h *decisionsHelper) requestCancelExternalWorkflowExecution(domain, workflo
 	return decision
 }
 
-func (h *decisionsHelper) handleRequestCancelExternalWorkflowExecutionInitiated(initiatedeventID int64, workflowID, cancellationID string) {
+func (h *decisionsHelper) handleRequestCancelExternalWorkflowExecutionInitiated(initiatedeventID int64, workflowID, cancellationID string, name string) {
 	if h.isCancelExternalWorkflowEventForChildWorkflow(cancellationID) {
 		// this is cancellation for child workflow only
-		decision := h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID))
+		decision := h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID), name)
 		decision.handleCancelInitiatedEvent()
 	} else {
 		// this is cancellation for external workflow
 		h.scheduledEventIDToCancellationID[initiatedeventID] = cancellationID
-		decision := h.getDecision(makeDecisionID(decisionTypeCancellation, cancellationID))
+		decision := h.getDecision(makeDecisionID(decisionTypeCancellation, cancellationID), name)
 		decision.handleInitiatedEvent()
 	}
 }
 
-func (h *decisionsHelper) handleExternalWorkflowExecutionCancelRequested(initiatedeventID int64, workflowID string) (bool, decisionStateMachine) {
+func (h *decisionsHelper) handleExternalWorkflowExecutionCancelRequested(initiatedeventID int64, workflowID string, name string) (bool, decisionStateMachine) {
 	var decision decisionStateMachine
 	cancellationID, isExternal := h.scheduledEventIDToCancellationID[initiatedeventID]
 	if !isExternal {
-		decision = h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID))
+		decision = h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID), name)
 		// no state change for child workflow, it is still in CancellationDecisionSent
 	} else {
 		// this is cancellation for external workflow
-		decision = h.getDecision(makeDecisionID(decisionTypeCancellation, cancellationID))
+		decision = h.getDecision(makeDecisionID(decisionTypeCancellation, cancellationID), name)
 		decision.handleCompletionEvent()
 	}
 	return isExternal, decision
 }
 
-func (h *decisionsHelper) handleRequestCancelExternalWorkflowExecutionFailed(initiatedeventID int64, workflowID string) (bool, decisionStateMachine) {
+func (h *decisionsHelper) handleRequestCancelExternalWorkflowExecutionFailed(initiatedeventID int64, workflowID string, name string) (bool, decisionStateMachine) {
 	var decision decisionStateMachine
 	cancellationID, isExternal := h.scheduledEventIDToCancellationID[initiatedeventID]
 	if !isExternal {
 		// this is cancellation for child workflow only
-		decision = h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID))
+		decision = h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID), name)
 		decision.handleCancelFailedEvent()
 	} else {
 		// this is cancellation for external workflow
-		decision = h.getDecision(makeDecisionID(decisionTypeCancellation, cancellationID))
+		decision = h.getDecision(makeDecisionID(decisionTypeCancellation, cancellationID), name)
 		decision.handleCompletionEvent()
 	}
 	return isExternal, decision
@@ -953,20 +953,20 @@ func (h *decisionsHelper) upsertSearchAttributes(upsertID string, searchAttr *s.
 	return decision
 }
 
-func (h *decisionsHelper) handleSignalExternalWorkflowExecutionInitiated(initiatedEventID int64, signalID string) {
+func (h *decisionsHelper) handleSignalExternalWorkflowExecutionInitiated(initiatedEventID int64, signalID string, name string) {
 	h.scheduledEventIDToSignalID[initiatedEventID] = signalID
-	decision := h.getDecision(makeDecisionID(decisionTypeSignal, signalID))
+	decision := h.getDecision(makeDecisionID(decisionTypeSignal, signalID), name)
 	decision.handleInitiatedEvent()
 }
 
-func (h *decisionsHelper) handleSignalExternalWorkflowExecutionCompleted(initiatedEventID int64) decisionStateMachine {
-	decision := h.getDecision(makeDecisionID(decisionTypeSignal, h.getSignalID(initiatedEventID)))
+func (h *decisionsHelper) handleSignalExternalWorkflowExecutionCompleted(initiatedEventID int64, name string) decisionStateMachine {
+	decision := h.getDecision(makeDecisionID(decisionTypeSignal, h.getSignalID(initiatedEventID)), name)
 	decision.handleCompletionEvent()
 	return decision
 }
 
-func (h *decisionsHelper) handleSignalExternalWorkflowExecutionFailed(initiatedEventID int64) decisionStateMachine {
-	decision := h.getDecision(makeDecisionID(decisionTypeSignal, h.getSignalID(initiatedEventID)))
+func (h *decisionsHelper) handleSignalExternalWorkflowExecutionFailed(initiatedEventID int64, name string) decisionStateMachine {
+	decision := h.getDecision(makeDecisionID(decisionTypeSignal, h.getSignalID(initiatedEventID)), name)
 	decision.handleCompletionEvent()
 	return decision
 }
@@ -985,47 +985,47 @@ func (h *decisionsHelper) startTimer(attributes *s.StartTimerDecisionAttributes)
 	return decision
 }
 
-func (h *decisionsHelper) cancelTimer(timerID string) decisionStateMachine {
-	decision := h.getDecision(makeDecisionID(decisionTypeTimer, timerID))
+func (h *decisionsHelper) cancelTimer(timerID string, name string) decisionStateMachine {
+	decision := h.getDecision(makeDecisionID(decisionTypeTimer, timerID), name)
 	decision.cancel()
 	return decision
 }
 
-func (h *decisionsHelper) handleTimerClosed(timerID string) decisionStateMachine {
-	decision := h.getDecision(makeDecisionID(decisionTypeTimer, timerID))
+func (h *decisionsHelper) handleTimerClosed(timerID string, name string) decisionStateMachine {
+	decision := h.getDecision(makeDecisionID(decisionTypeTimer, timerID), name)
 	decision.handleCompletionEvent()
 	return decision
 }
 
-func (h *decisionsHelper) handleTimerStarted(timerID string) {
-	decision := h.getDecision(makeDecisionID(decisionTypeTimer, timerID))
+func (h *decisionsHelper) handleTimerStarted(timerID string, name string) {
+	decision := h.getDecision(makeDecisionID(decisionTypeTimer, timerID), name)
 	decision.handleInitiatedEvent()
 }
 
-func (h *decisionsHelper) handleTimerCanceled(timerID string) {
-	decision := h.getDecision(makeDecisionID(decisionTypeTimer, timerID))
+func (h *decisionsHelper) handleTimerCanceled(timerID string, name string) {
+	decision := h.getDecision(makeDecisionID(decisionTypeTimer, timerID), name)
 	decision.handleCanceledEvent()
 }
 
-func (h *decisionsHelper) handleCancelTimerFailed(timerID string) {
-	decision := h.getDecision(makeDecisionID(decisionTypeTimer, timerID))
+func (h *decisionsHelper) handleCancelTimerFailed(timerID string, name string) {
+	decision := h.getDecision(makeDecisionID(decisionTypeTimer, timerID), name)
 	decision.handleCancelFailedEvent()
 }
 
-func (h *decisionsHelper) handleChildWorkflowExecutionStarted(workflowID string) decisionStateMachine {
-	decision := h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID))
+func (h *decisionsHelper) handleChildWorkflowExecutionStarted(workflowID string, name string) decisionStateMachine {
+	decision := h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID), name)
 	decision.handleStartedEvent()
 	return decision
 }
 
-func (h *decisionsHelper) handleChildWorkflowExecutionClosed(workflowID string) decisionStateMachine {
-	decision := h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID))
+func (h *decisionsHelper) handleChildWorkflowExecutionClosed(workflowID string, name string) decisionStateMachine {
+	decision := h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID), name)
 	decision.handleCompletionEvent()
 	return decision
 }
 
-func (h *decisionsHelper) handleChildWorkflowExecutionCanceled(workflowID string) decisionStateMachine {
-	decision := h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID))
+func (h *decisionsHelper) handleChildWorkflowExecutionCanceled(workflowID string, name string) decisionStateMachine {
+	decision := h.getDecision(makeDecisionID(decisionTypeChildWorkflow, workflowID), name)
 	decision.handleCanceledEvent()
 	return decision
 }

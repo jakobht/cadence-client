@@ -305,7 +305,7 @@ func getTestReplayWorkflowFullHistory(t *testing.T) *shared.History {
 			createTestEventDecisionTaskStarted(3),
 			createTestEventDecisionTaskCompleted(4, &shared.DecisionTaskCompletedEventAttributes{}),
 			createTestEventActivityTaskScheduled(5, &shared.ActivityTaskScheduledEventAttributes{
-				ActivityId:   common.StringPtr("0"),
+				ActivityId:   common.StringPtr("0fdeafe"),
 				ActivityType: &shared.ActivityType{Name: common.StringPtr("testActivity")},
 				TaskList:     &shared.TaskList{Name: &testTaskList},
 			}),
