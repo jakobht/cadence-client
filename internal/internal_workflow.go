@@ -307,6 +307,9 @@ func (f *futureImpl) Get(ctx Context, value interface{}) error {
 	if rf.Type().Kind() != reflect.Ptr {
 		return errors.New("value parameter is not a pointer")
 	}
+	if rf.IsNil() {
+		return errors.New("value parameter is a nil interface pointer")
+	}
 
 	if blob, ok := f.value.([]byte); ok && !util.IsTypeByteSlice(reflect.TypeOf(value)) {
 		if err := decodeArg(getDataConverterFromWorkflowContext(ctx), blob, value); err != nil {
@@ -1298,6 +1301,9 @@ func (d *decodeFutureImpl) Get(ctx Context, value interface{}) error {
 	rf := reflect.ValueOf(value)
 	if rf.Type().Kind() != reflect.Ptr {
 		return errors.New("value parameter is not a pointer")
+	}
+	if rf.IsNil() {
+		return errors.New("value parameter is a nil interface pointer")
 	}
 
 	err := deSerializeFunctionResult(d.fn, d.futureImpl.value.([]byte), value, getDataConverterFromWorkflowContext(ctx), d.channel.env.GetRegistry())
