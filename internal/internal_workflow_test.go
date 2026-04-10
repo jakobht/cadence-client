@@ -1079,6 +1079,15 @@ func (s *WorkflowUnitTest) Test_GetActivityOptionsNil() {
 	s.Equal("defaults", result)
 }
 
+func (s *WorkflowUnitTest) Test_GetActivityOptionsNoContext() {
+	// Background() has no activity options set, so GetActivityOptions returns nil
+	s.Nil(GetActivityOptions(Background()))
+}
+
+func (s *WorkflowUnitTest) Test_ConvertFromThriftRetryPolicyNil() {
+	s.Nil(convertFromThriftRetryPolicy(nil))
+}
+
 const (
 	memoTestKey = "testKey"
 	memoTestVal = "testVal"
